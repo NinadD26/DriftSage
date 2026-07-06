@@ -9,3 +9,4 @@ terraform/tfplan
 terraform/drift.json
 terraform/.terraform.lock.hcl
 terraform/demo_config.txt
+venv/
