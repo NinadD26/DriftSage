@@ -1,0 +1,11 @@
+terraform:
+  working_dir: ./terraform
+
+reports:
+  output_dir: ./reports
+
+groq:
+  model: llama-3.3-70b-versatile
+
+risk:
+  auto_fix: false

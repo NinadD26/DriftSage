@@ -1,0 +1,52 @@
+name: Terraform Drift Scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"   # daily at 3am UTC
+
+jobs:
+  drift-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.0"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Terraform init
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: Terraform apply (establish baseline)
+        working-directory: ./terraform
+        run: terraform apply -auto-approve
+
+      - name: Simulate drift (manual change outside Terraform)
+        working-directory: ./terraform
+        run: echo "environment=staging  # changed outside terraform" >> demo_config.txt
+
+      - name: Run drift scan
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python app/main.py
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: reports/
+          if-no-files-found: ignore
