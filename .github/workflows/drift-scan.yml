@@ -36,7 +36,8 @@ jobs:
 
       - name: Simulate drift (manual change outside Terraform)
         working-directory: ./terraform
-        run: echo "environment=staging  # changed outside terraform" >> demo_config.txt
+        run: echo "changed_outside_terraform=true" >> demo_config.txt
+        # run: echo "environment=staging  # changed outside terraform" >> demo_config.txt
 
       - name: Run drift scan
         env:
