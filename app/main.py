@@ -1,3 +1,5 @@
+import os
+import subprocess
 import yaml
 from dotenv import load_dotenv
 
@@ -9,6 +11,25 @@ from groq_analyzer import GroqAnalyzer
 from remediation_generator import (
     RemediationGenerator
 )
+
+
+def resolve_commit_sha():
+    # In CI, GitHub Actions already sets GITHUB_SHA.
+    # Locally, fall back to the current git commit.
+    sha = os.environ.get("GITHUB_SHA")
+    if sha:
+        return sha
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "local"
 
 
 def main():
@@ -36,6 +57,8 @@ def main():
     result = analyzer.analyze(
         [d.model_dump() for d in drift]
     )
+
+    os.environ["GIT_COMMIT_SHA"] = resolve_commit_sha()
 
     RemediationGenerator.save(result)
 

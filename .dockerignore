@@ -1,0 +1,13 @@
+venv/
+.venv/
+.git/
+.github/
+__pycache__/
+*.pyc
+.env
+reports/
+terraform/.terraform/
+terraform/*.tfstate*
+terraform/tfplan
+terraform/drift.json
+terraform/demo_config.txt
