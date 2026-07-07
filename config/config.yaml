@@ -1,11 +1,26 @@
-terraform:
-  working_dir: ./terraform
+# Each target is any Terraform root module - local, AWS, GCP,
+# Azure, single or multi-module. DriftSage doesn't care what's
+# inside; Terraform handles the provider/backend specifics.
+targets:
+  - name: local-demo
+    path: ./terraform
 
-reports:
-  output_dir: ./reports
+  # Example: add your own project with zero code changes.
+  # - name: autoflow
+  #   path: ./projects/autoflow
+  # - name: brief-bot
+  #   path: ./projects/brief-bot
 
 groq:
   model: llama-3.3-70b-versatile
 
+reports:
+  output_dir: ./reports
+
 risk:
   auto_fix: false
+
+# Max drift items sent to the LLM in a single call. Larger
+# drift sets are chunked into batches of this size, so this
+# scales from 1 resource to 500+ without hitting token limits.
+batch_size: 15

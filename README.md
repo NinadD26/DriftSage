@@ -75,14 +75,46 @@ docker run --rm --env-file .env -v $(pwd)/terraform:/app/terraform driftsage
 
 ## CI/CD
 
-The included GitHub Actions workflow (`.github/workflows/drift-scan.yml`):
-- Triggers manually (`workflow_dispatch`) or daily on a schedule
-- Spins up Terraform + Python, applies the baseline, simulates drift, runs the scan
-- Uploads `reports/` as a build artifact named with the commit SHA, so every run's results are traceable
+Two workflows are included in `.github/workflows/`:
 
-Requires a `GROQ_API_KEY` repository secret (Settings → Secrets and variables → Actions).
+- **`drift-scan-demo.yml`** — self-contained local demo (no cloud account needed). Establishes a baseline, simulates drift, runs the scan. Good for showing the pipeline works end-to-end without any setup.
+- **`drift-scan.yml`** — generic scan for real Terraform projects configured in `config/config.yaml`'s `targets` list. No drift simulation — it just detects whatever's actually drifted. See "Bring your own Terraform project" below for setup.
 
-## Notes
+Both require a `GROQ_API_KEY` repository secret (Settings → Secrets and variables → Actions), and upload `reports/` as a build artifact named with the commit SHA.
+
+## Bring your own Terraform project
+
+DriftSage's core engine is provider- and scale-agnostic: it doesn't care whether a target is a single local-file demo resource, a single-module AWS project, or a multi-module production setup spanning hundreds of resources across ECS, Lambda, ALBs, and DocumentDB. Terraform itself handles the provider/backend specifics — DriftSage just runs `terraform init` + `terraform plan -refresh-only` against whatever directory you point it at, and parses whatever comes back.
+
+**To add any Terraform project, real or demo, with zero code changes:**
+
+Add an entry to `config/config.yaml`:
+
+```yaml
+targets:
+  - name: local-demo
+    path: ./terraform
+
+  - name: my-production-project
+    path: ./projects/my-production-project
+```
+
+Each target is scanned independently, and results are saved to `reports/<target-name>/`.
+
+### Scaling to large, multi-module infrastructure
+
+For projects with many resources (e.g. 200+ CloudWatch alarms across multiple ECS services, Lambda functions, and ALBs via reusable Terraform modules with `for_each`), two things matter:
+
+- **Module-qualified resource addresses** (e.g. `module.ecs_alarms["service-name"].aws_cloudwatch_metric_alarm.x`) are handled automatically — `drift_parser.py` reads whatever address Terraform reports, regardless of module nesting.
+- **Batching**: large drift sets are automatically chunked (`batch_size` in `config.yaml`, default 15) before being sent to the LLM, so this scales without hitting context/token limits or excessive cost, whether there's 1 drifted resource or 500.
+
+### Running against real cloud infrastructure
+
+1. Ensure the target directory's own `backend.tf`/provider blocks are already configured (S3+DynamoDB, GCS, Azure Storage, etc.) — DriftSage doesn't modify or assume backend config
+2. Add cloud credentials as GitHub repo secrets (see `.github/workflows/drift-scan.yml` for AWS examples; swap for GCP/Azure equivalents as needed)
+3. Use the `drift-scan.yml` workflow (not `drift-scan-demo.yml`, which is local-only and simulates drift for demo purposes) — it runs on a schedule with no drift-simulation step, since real infrastructure already has whatever drift naturally occurred since the last apply
+
+
 
 - The demo uses Terraform's `local_file` provider so anyone can run this without an AWS/cloud account.
 - To point this at real infrastructure, update `config/config.yaml`'s `working_dir` to a real Terraform project — the drift-detection logic is provider-agnostic.

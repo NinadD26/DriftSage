@@ -38,33 +38,38 @@ def main():
         open("config/config.yaml")
     )
 
-    tf = TerraformRunner(
-        config["terraform"]["working_dir"]
-    )
-
-    print("Running terraform scan")
-
-    plan = tf.generate_plan()
-
-    drift = DriftParser.parse(plan)
-
-    if not drift:
-        print("No drift detected")
-        return
-
-    analyzer = GroqAnalyzer()
-
-    result = analyzer.analyze(
-        [d.model_dump() for d in drift]
-    )
-
     os.environ["GIT_COMMIT_SHA"] = resolve_commit_sha()
 
-    RemediationGenerator.save(result)
+    batch_size = config.get("batch_size", 15)
+    targets = config["targets"]
 
-    print(
-        "Analysis saved in reports/"
-    )
+    for target in targets:
+
+        name = target["name"]
+        path = target["path"]
+
+        print(f"\n>>> Scanning target: {name} ({path})")
+
+        tf = TerraformRunner(path)
+
+        tf.init()
+        plan = tf.generate_plan()
+
+        drift = DriftParser.parse(plan)
+
+        if not drift:
+            print(f"No drift detected for {name}")
+            continue
+
+        analyzer = GroqAnalyzer(batch_size=batch_size)
+
+        results = analyzer.analyze(
+            [d.model_dump() for d in drift]
+        )
+
+        RemediationGenerator.save(name, results)
+
+    print("\nAll targets scanned. Reports saved in reports/")
 
 
 if __name__ == "__main__":

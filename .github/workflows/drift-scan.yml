@@ -1,9 +1,20 @@
-name: Terraform Drift Scan
+name: Terraform Drift Scan (Real Infra)
+
+# Generic drift scan for any Terraform project(s) configured
+# in config/config.yaml under "targets". Works with any cloud
+# provider/backend - Terraform's own backend.tf and provider
+# blocks in each target directory handle that.
+#
+# Requirements before enabling this workflow:
+#   1. Add your target(s) to config/config.yaml
+#   2. Add cloud credentials as repo secrets (examples below
+#      show AWS; swap for GCP/Azure equivalents as needed)
+#   3. Add GROQ_API_KEY as a repo secret
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 3 * * *"   # daily at 3am UTC
+    - cron: "0 4 * * *"   # daily at 4am UTC
 
 jobs:
   drift-scan:
@@ -26,27 +37,24 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Terraform init
-        working-directory: ./terraform
-        run: terraform init
+      # No "terraform init/apply" or drift-simulation steps here -
+      # real infra already exists; main.py runs "terraform init"
+      # per target itself, then a refresh-only plan to detect
+      # whatever has actually drifted since the last apply.
 
-      - name: Terraform apply (establish baseline)
-        working-directory: ./terraform
-        run: terraform apply -auto-approve
-
-      - name: Simulate drift (manual change outside Terraform)
-        working-directory: ./terraform
-        run: echo "changed_outside_terraform=true" >> demo_config.txt
-
-      - name: Run drift scan
+      - name: Run drift scan across all configured targets
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # Uncomment and configure for your cloud provider:
+          # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         run: python app/main.py
 
-      - name: Upload drift report
+      - name: Upload drift reports (all targets)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: drift-report-${{ github.sha }}
+          name: drift-reports-${{ github.sha }}
           path: reports/
           if-no-files-found: ignore

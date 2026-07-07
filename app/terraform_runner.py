@@ -8,6 +8,20 @@ class TerraformRunner:
     def __init__(self, working_dir):
         self.working_dir = working_dir
 
+    def init(self):
+
+        try:
+            subprocess.run(
+                ["terraform", "init"],
+                cwd=self.working_dir,
+                check=True
+            )
+        except FileNotFoundError:
+            raise RuntimeError(
+                "Terraform CLI not found. Install it and "
+                "ensure it's on your PATH."
+            )
+
     def generate_plan(self):
 
         try:

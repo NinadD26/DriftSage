@@ -6,55 +6,55 @@ from pathlib import Path
 class RemediationGenerator:
 
     @staticmethod
-    def save(result_text):
+    def save(target_name, result_texts):
+        """
+        target_name: name of the Terraform target (from config)
+        result_texts: list of JSON strings, one per analysis batch
+        """
 
-        data = json.loads(result_text)
-
-        Path("reports").mkdir(
-            exist_ok=True
-        )
-
-        # Short commit SHA, so each CI run's report is
-        # traceable back to the exact code + drift snapshot.
         sha = os.environ.get(
             "GIT_COMMIT_SHA",
             "local"
         )[:7]
 
-        # Print a plain-language summary to the console/CI log,
-        # so results are visible without opening any file.
-        print("\n=== Drift Analysis Summary ===")
-        print(f"Commit:      {sha}")
-        print(f"Severity:    {data['severity']}")
-        print(f"Intent:      {data['intent']}")
-        print(f"Risk:        {data['risk']}")
-        print(f"Explanation: {data['explanation']}")
-        print("\n--- Suggested remediation ---")
-        print(data["remediation_script"])
-        print("=== End of summary ===\n")
+        out_dir = Path("reports") / target_name
+        out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Always overwrite "latest" for convenience...
-        with open(
-            "reports/remediation.sh",
-            "w"
-        ) as f:
-            f.write(data["remediation_script"])
+        print(f"\n=== Drift Analysis Summary: {target_name} ===")
+        print(f"Commit: {sha}")
 
-        with open(
-            "reports/analysis.json",
-            "w"
-        ) as f:
-            json.dump(data, f, indent=2)
+        combined_scripts = ["#!/bin/bash"]
+        all_data = []
 
-        # ...and also keep a commit-tagged copy for history.
-        with open(
-            f"reports/remediation_{sha}.sh",
-            "w"
-        ) as f:
-            f.write(data["remediation_script"])
+        for i, result_text in enumerate(result_texts):
 
-        with open(
-            f"reports/analysis_{sha}.json",
-            "w"
-        ) as f:
-            json.dump(data, f, indent=2)
+            data = json.loads(result_text)
+            all_data.append(data)
+
+            print(f"\n--- Batch {i + 1}/{len(result_texts)} ---")
+            print(f"Severity:    {data['severity']}")
+            print(f"Intent:      {data['intent']}")
+            print(f"Risk:        {data['risk']}")
+            print(f"Explanation: {data['explanation']}")
+            print("Remediation:")
+            print(data["remediation_script"])
+
+            combined_scripts.append(
+                data["remediation_script"].replace(
+                    "#!/bin/bash", ""
+                ).strip()
+            )
+
+        print(f"=== End of summary: {target_name} ===\n")
+
+        remediation_text = "\n".join(combined_scripts) + "\n"
+
+        with open(out_dir / "remediation.sh", "w") as f:
+            f.write(remediation_text)
+        with open(out_dir / f"remediation_{sha}.sh", "w") as f:
+            f.write(remediation_text)
+
+        with open(out_dir / "analysis.json", "w") as f:
+            json.dump(all_data, f, indent=2)
+        with open(out_dir / f"analysis_{sha}.json", "w") as f:
+            json.dump(all_data, f, indent=2)
